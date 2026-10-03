@@ -268,3 +268,24 @@ test('CSRF и origin-защита отклоняют поддельные зап
   const afterLogout = await artemAgent.get('/api/admin/tasks');
   assert.equal(afterLogout.status, 401);
 });
+
+test('секретные файлы и БД не доступны по HTTP, закрытая часть помечена noindex', async () => {
+  for (const url of [
+    '/.env',
+    '/.git/config',
+    '/data/sodruzhestvo.db',
+    '/prisma/schema.prisma',
+  ]) {
+    const response = await request(app).get(url);
+    assert.equal(response.status, 404, `${url} должен возвращать 404`);
+  }
+
+  const loginPage = await request(app).get('/admin/login');
+  assert.equal(loginPage.status, 200);
+  assert.equal(loginPage.headers['x-robots-tag'], 'noindex, nofollow, noarchive');
+  assert.match(loginPage.headers['cache-control'] || '', /no-store/i);
+
+  const health = await request(app).get('/health');
+  assert.equal(health.headers['x-robots-tag'], 'noindex, nofollow, noarchive');
+  assert.match(health.headers['cache-control'] || '', /no-store/i);
+});

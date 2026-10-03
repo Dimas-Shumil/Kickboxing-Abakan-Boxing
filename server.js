@@ -142,6 +142,36 @@ function createApp() {
 
   app.use(validateOrigin);
 
+  // Defense in depth: секреты, исходники Prisma и runtime-БД никогда не должны
+  // становиться HTTP-ресурсами, даже если статическая раздача будет расширена позже.
+  app.use((req, res, next) => {
+    const requestPath = String(req.path || '').toLowerCase();
+    const sensitive =
+      requestPath === '/.env' ||
+      requestPath.startsWith('/.env.') ||
+      requestPath === '/.git' ||
+      requestPath.startsWith('/.git/') ||
+      requestPath === '/data' ||
+      requestPath.startsWith('/data/') ||
+      requestPath === '/prisma' ||
+      requestPath.startsWith('/prisma/');
+
+    if (sensitive) {
+      return res.status(404).type('text/plain').send('Страница не найдена');
+    }
+    return next();
+  });
+
+  const protectFromIndexing = (_req, res, next) => {
+    res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.set('Cache-Control', 'no-store');
+    next();
+  };
+
+  app.use('/admin', protectFromIndexing);
+  app.use('/api/admin', protectFromIndexing);
+  app.use('/health', protectFromIndexing);
+
   app.use('/api/public', publicRoutes);
   app.use('/api/admin/auth', authRoutes);
   app.use(
